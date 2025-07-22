@@ -39,8 +39,8 @@ platform :ios do
 
     # Upload to TestFlight
     upload_to_testflight(
-      username: ENV["APPLE_ID"],
-      app_specific_password: ENV["APP_SPECIFIC_PASSWORD"],
+      username: ENV["rohit@kahunas.io"],
+      app_specific_password: ENV["sywe-tgou-rtlh-jnqz"],
       skip_waiting_for_build_processing: true,
       skip_submission: true
     )
