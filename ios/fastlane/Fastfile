@@ -31,7 +31,9 @@ platform :ios do
       scheme: ENV["SCHEME"] || "Runner",
       export_method: "app-store",
       xcargs: "-allowProvisioningUpdates",
+      export_team_id: ENV["TEAM_ID"] || CredentialsManager::AppfileConfig.try_fetch_value(:team_id),
       export_options: {
+        teamID: ENV["TEAM_ID"] || CredentialsManager::AppfileConfig.try_fetch_value(:team_id),
         provisioningProfiles: ENV["PROVISIONING_PROFILE_NAME"] ? {
           CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier) => ENV["PROVISIONING_PROFILE_NAME"]
         } : nil

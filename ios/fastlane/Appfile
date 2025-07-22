@@ -8,7 +8,7 @@ apple_id(ENV["APPLE_ID"])
 # itc_team_id("123456789")
 
 # Your Developer Portal Team ID (if you're in multiple teams)
-# team_id("ABCDEF1234")
+team_id(ENV["TEAM_ID"]) if ENV["TEAM_ID"]
 
 # You can uncomment the lines below and add your own 
 # team selection in case you're in multiple teams
