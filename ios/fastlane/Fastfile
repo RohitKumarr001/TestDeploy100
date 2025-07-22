@@ -3,32 +3,42 @@ default_platform(:ios)
 platform :ios do
   desc "Push a new beta build to TestFlight"
   lane :beta do
+    # Ensure we have a team ID
+    team_id = ENV["TEAM_ID"] || CredentialsManager::AppfileConfig.try_fetch_value(:team_id)
+    
+    if team_id.nil? || team_id.empty?
+      UI.user_error!("No Team ID found. Please set TEAM_ID in your environment variables or Appfile")
+    end
+    
     # Determine signing method
     if ENV["IOS_DIST_SIGNING_KEY"] && !ENV["IOS_DIST_SIGNING_KEY"].empty?
       # Use manual certificates (already imported in GitHub Actions)
+      UI.message("Using manual code signing")
+      
       update_code_signing_settings(
         use_automatic_signing: false,
         path: "Runner.xcodeproj",
-        team_id: ENV["TEAM_ID"] || CredentialsManager::AppfileConfig.try_fetch_value(:team_id),
+        team_id: team_id,
         code_sign_identity: "iPhone Distribution"
       )
     elsif ENV["MATCH_GIT_URL"] && !ENV["MATCH_GIT_URL"].empty?
       # Use Match for code signing
+      UI.message("Using Match for code signing")
       match(type: "appstore", readonly: true)
       
       update_code_signing_settings(
         use_automatic_signing: false,
         path: "Runner.xcodeproj",
-        team_id: ENV["TEAM_ID"] || CredentialsManager::AppfileConfig.try_fetch_value(:team_id),
-        profile_name: ENV["PROVISIONING_PROFILE_NAME"],
+        team_id: team_id,
         code_sign_identity: "iPhone Distribution"
       )
     else
       # Use automatic signing
+      UI.message("Using automatic code signing")
       update_code_signing_settings(
         use_automatic_signing: true,
         path: "Runner.xcodeproj",
-        team_id: ENV["TEAM_ID"] || CredentialsManager::AppfileConfig.try_fetch_value(:team_id)
+        team_id: team_id
       )
     end
 
@@ -38,12 +48,10 @@ platform :ios do
       scheme: ENV["SCHEME"] || "Runner",
       export_method: "app-store",
       xcargs: "-allowProvisioningUpdates",
-      export_team_id: ENV["TEAM_ID"] || CredentialsManager::AppfileConfig.try_fetch_value(:team_id),
+      export_team_id: team_id,
       export_options: {
-        teamID: ENV["TEAM_ID"] || CredentialsManager::AppfileConfig.try_fetch_value(:team_id),
-        provisioningProfiles: ENV["PROVISIONING_PROFILE_NAME"] ? {
-          CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier) => ENV["PROVISIONING_PROFILE_NAME"]
-        } : nil
+        teamID: team_id,
+        signingStyle: ENV["IOS_DIST_SIGNING_KEY"] ? "manual" : "automatic"
       }
     )
 

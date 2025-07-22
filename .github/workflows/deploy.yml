@@ -112,6 +112,11 @@ jobs:
             # Apply provisioning profile
             mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
             cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles
+            
+            # Extract UUID from provisioning profile
+            PROVISION_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin <<< $(security cms -D -i $PP_PATH))
+            echo "IOS_PROVISION_PROFILE_UUID=$PROVISION_UUID" >> $GITHUB_ENV
+            echo "RUNNER_TEMP=$RUNNER_TEMP" >> $GITHUB_ENV
           elif [ -n "${{ secrets.MATCH_GIT_URL }}" ]; then
             echo "Setting up Match certificates..."
             cd ios
@@ -133,6 +138,7 @@ jobs:
           TEAM_ID: ${{ secrets.TEAM_ID }}
           XCODEPROJ: ${{ secrets.XCODEPROJ }}
           SCHEME: ${{ secrets.SCHEME }}
+          IOS_DIST_SIGNING_KEY: ${{ secrets.IOS_DIST_SIGNING_KEY }}
         run: |
           cd ios
           bundle exec fastlane beta
