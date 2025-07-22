@@ -79,18 +79,45 @@ jobs:
           cd ios
           bundle install
 
-      - name: Setup certificates (if Match is configured)
+      - name: Setup certificates
         env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APP_SPECIFIC_PASSWORD: ${{ secrets.APP_SPECIFIC_PASSWORD }}
-          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+          IOS_DIST_SIGNING_KEY: ${{ secrets.IOS_DIST_SIGNING_KEY }}
+          IOS_DIST_SIGNING_KEY_PASSWORD: ${{ secrets.IOS_DIST_SIGNING_KEY_PASSWORD }}
+          IOS_PROVISION_PROFILE: ${{ secrets.IOS_PROVISION_PROFILE }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
-          cd ios
-          if [ -n "$MATCH_GIT_URL" ]; then
+          # Check if using manual certificates or Match
+          if [ -n "$IOS_DIST_SIGNING_KEY" ]; then
+            echo "Setting up manual certificates..."
+            
+            # Create variables
+            CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+            PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
+            KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+            
+            # Import certificate to keychain
+            echo -n "$IOS_DIST_SIGNING_KEY" | base64 --decode -o $CERTIFICATE_PATH
+            echo -n "$IOS_PROVISION_PROFILE" | base64 --decode -o $PP_PATH
+            
+            # Create temporary keychain
+            security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+            security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+            security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+            
+            # Import certificate
+            security import $CERTIFICATE_PATH -P "$IOS_DIST_SIGNING_KEY_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+            security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+            security list-keychain -d user -s $KEYCHAIN_PATH
+            
+            # Apply provisioning profile
+            mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+            cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles
+          elif [ -n "${{ secrets.MATCH_GIT_URL }}" ]; then
+            echo "Setting up Match certificates..."
+            cd ios
             bundle exec fastlane match appstore --readonly
           else
-            echo "Match not configured, skipping certificate setup"
+            echo "No certificate configuration found, will use automatic signing"
           fi
 
       - name: Build iOS

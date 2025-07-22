@@ -3,16 +3,23 @@ default_platform(:ios)
 platform :ios do
   desc "Push a new beta build to TestFlight"
   lane :beta do
-    # Check if we should use Match or automatic signing
-    if ENV["MATCH_GIT_URL"] && !ENV["MATCH_GIT_URL"].empty?
-      # Use Match for code signing
-      match(type: "appstore", readonly: true)
-      
-      # Use manual signing with Match
+    # Determine signing method
+    if ENV["IOS_DIST_SIGNING_KEY"] && !ENV["IOS_DIST_SIGNING_KEY"].empty?
+      # Use manual certificates (already imported in GitHub Actions)
       update_code_signing_settings(
         use_automatic_signing: false,
         path: "Runner.xcodeproj",
-        team_id: CredentialsManager::AppfileConfig.try_fetch_value(:team_id),
+        team_id: ENV["TEAM_ID"] || CredentialsManager::AppfileConfig.try_fetch_value(:team_id),
+        code_sign_identity: "iPhone Distribution"
+      )
+    elsif ENV["MATCH_GIT_URL"] && !ENV["MATCH_GIT_URL"].empty?
+      # Use Match for code signing
+      match(type: "appstore", readonly: true)
+      
+      update_code_signing_settings(
+        use_automatic_signing: false,
+        path: "Runner.xcodeproj",
+        team_id: ENV["TEAM_ID"] || CredentialsManager::AppfileConfig.try_fetch_value(:team_id),
         profile_name: ENV["PROVISIONING_PROFILE_NAME"],
         code_sign_identity: "iPhone Distribution"
       )
