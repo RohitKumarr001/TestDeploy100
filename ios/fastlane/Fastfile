@@ -11,7 +11,7 @@ platform :ios do
       # Use manual signing with Match
       update_code_signing_settings(
         use_automatic_signing: false,
-        path: ENV["XCODEPROJ"] || "Runner.xcodeproj",
+        path: "Runner.xcodeproj",
         team_id: CredentialsManager::AppfileConfig.try_fetch_value(:team_id),
         profile_name: ENV["PROVISIONING_PROFILE_NAME"],
         code_sign_identity: "iPhone Distribution"
@@ -20,7 +20,7 @@ platform :ios do
       # Use automatic signing
       update_code_signing_settings(
         use_automatic_signing: true,
-        path: ENV["XCODEPROJ"] || "Runner.xcodeproj",
+        path: "Runner.xcodeproj",
         team_id: CredentialsManager::AppfileConfig.try_fetch_value(:team_id)
       )
     end
@@ -39,8 +39,8 @@ platform :ios do
 
     # Upload to TestFlight
     upload_to_testflight(
-      username: ENV["rohit@kahunas.io"],
-      app_specific_password: ENV["sywe-tgou-rtlh-jnqz"],
+      username: ENV["APPLE_ID"],
+      app_specific_password: ENV["APP_SPECIFIC_PASSWORD"],
       skip_waiting_for_build_processing: true,
       skip_submission: true
     )
