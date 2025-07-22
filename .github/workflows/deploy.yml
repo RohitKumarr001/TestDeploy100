@@ -80,7 +80,6 @@ jobs:
           bundle install
 
       - name: Setup certificates (if Match is configured)
-        if: ${{ secrets.MATCH_GIT_URL != '' }}
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APP_SPECIFIC_PASSWORD: ${{ secrets.APP_SPECIFIC_PASSWORD }}
@@ -88,7 +87,11 @@ jobs:
           MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
         run: |
           cd ios
-          bundle exec fastlane match appstore --readonly
+          if [ -n "$MATCH_GIT_URL" ]; then
+            bundle exec fastlane match appstore --readonly
+          else
+            echo "Match not configured, skipping certificate setup"
+          fi
 
       - name: Build iOS
         run: flutter build ios --release --no-codesign
