@@ -5,44 +5,50 @@ on:
     branches: [ main ]
 
 jobs:
-  android:
-    name: Deploy Android to Firebase
-    runs-on: ubuntu-latest
+  deploy:
+    name: Deploy iOS and Android
+    runs-on: macos-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Setup Java
-        uses: actions/setup-java@v3
+        uses: actions/checkout@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          fetch-depth: 0
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.x'
+          flutter-version: '3.24.0'
           channel: 'stable'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
       - name: Get dependencies
         run: flutter pub get
-
-      - name: Build APK
-        run: flutter build apk --release
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.0'
-          bundler-cache: true
-          working-directory: android
 
-      - name: Install Fastlane dependencies
+      - name: Install iOS Fastlane dependencies
+        run: |
+          cd ios
+          bundle install
+
+      - name: Install Android Fastlane dependencies
         run: |
           cd android
           bundle install
 
-      - name: Deploy to Firebase App Distribution
+      # === ANDROID BUILD & DEPLOY ===
+      - name: Build Android APK
+        run: flutter build apk --release
+
+      - name: Deploy Android to Firebase
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
           FIREBASE_ANDROID_APP_ID: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
@@ -51,93 +57,51 @@ jobs:
           cd android
           bundle exec fastlane beta
 
-  ios:
-    name: Deploy iOS to TestFlight
-    runs-on: macos-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.x'
-          channel: 'stable'
-
-      - name: Get dependencies
-        run: flutter pub get
-
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.0'
-          bundler-cache: true
-          working-directory: ios
-
-      - name: Install Fastlane dependencies
-        run: |
-          cd ios
-          bundle install
-
-      - name: Setup certificates
+      # === iOS BUILD & DEPLOY ===
+      - name: Setup iOS certificates
         env:
           IOS_DIST_SIGNING_KEY: ${{ secrets.IOS_DIST_SIGNING_KEY }}
           IOS_DIST_SIGNING_KEY_PASSWORD: ${{ secrets.IOS_DIST_SIGNING_KEY_PASSWORD }}
           IOS_PROVISION_PROFILE: ${{ secrets.IOS_PROVISION_PROFILE }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
-          # Check if using manual certificates or Match
-          if [ -n "$IOS_DIST_SIGNING_KEY" ]; then
-            echo "Setting up manual certificates..."
-            
-            # Create variables
-            CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
-            PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
-            KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
-            
-            # Import certificate to keychain
-            echo -n "$IOS_DIST_SIGNING_KEY" | base64 --decode -o $CERTIFICATE_PATH
-            echo -n "$IOS_PROVISION_PROFILE" | base64 --decode -o $PP_PATH
-            
-            # Create temporary keychain
-            security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-            security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-            security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-            
-            # Import certificate
-            security import $CERTIFICATE_PATH -P "$IOS_DIST_SIGNING_KEY_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
-            security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-            security list-keychain -d user -s $KEYCHAIN_PATH
-            
-            # Apply provisioning profile
-            mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-            cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles
-            
-            # Extract UUID from provisioning profile
-            PROVISION_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin <<< $(security cms -D -i $PP_PATH))
-            echo "IOS_PROVISION_PROFILE_UUID=$PROVISION_UUID" >> $GITHUB_ENV
-            echo "RUNNER_TEMP=$RUNNER_TEMP" >> $GITHUB_ENV
-          elif [ -n "${{ secrets.MATCH_GIT_URL }}" ]; then
-            echo "Setting up Match certificates..."
-            cd ios
-            bundle exec fastlane match appstore --readonly
-          else
-            echo "No certificate configuration found, will use automatic signing"
-          fi
+          # Create variables
+          CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+          PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          
+          # Decode certificates
+          echo -n "$IOS_DIST_SIGNING_KEY" | base64 --decode -o $CERTIFICATE_PATH
+          echo -n "$IOS_PROVISION_PROFILE" | base64 --decode -o $PP_PATH
+          
+          # Create temporary keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          
+          # Import certificate
+          security import $CERTIFICATE_PATH -P "$IOS_DIST_SIGNING_KEY_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+          security list-keychain -d user -s $KEYCHAIN_PATH
+          
+          # Apply provisioning profile
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin <<< $(security cms -D -i $PP_PATH))
+          cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
+          
+          echo "Provisioning profile installed with UUID: $UUID"
 
       - name: Build iOS
         run: flutter build ios --release --no-codesign
 
-      - name: Deploy to TestFlight
+      - name: Deploy iOS to TestFlight
         env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APP_SPECIFIC_PASSWORD: ${{ secrets.APP_SPECIFIC_PASSWORD }}
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           APP_STORE_CONNECT_API_ISSUER: ${{ secrets.APP_STORE_CONNECT_API_ISSUER }}
           APP_STORE_CONNECT_API_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APP_SPECIFIC_PASSWORD: ${{ secrets.APP_SPECIFIC_PASSWORD }}
           TEAM_ID: ${{ secrets.TEAM_ID }}
-          XCODEPROJ: ${{ secrets.XCODEPROJ }}
-          SCHEME: ${{ secrets.SCHEME }}
           IOS_DIST_SIGNING_KEY: ${{ secrets.IOS_DIST_SIGNING_KEY }}
         run: |
           cd ios

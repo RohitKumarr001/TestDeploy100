@@ -3,29 +3,12 @@ default_platform(:ios)
 platform :ios do
   desc "Push a new beta build to TestFlight"
   lane :beta do
-    # Ensure we have a team ID
-    team_id = ENV["TEAM_ID"] || CredentialsManager::AppfileConfig.try_fetch_value(:team_id)
+    # Ensure we have required environment variables
+    team_id = ENV["TEAM_ID"] || CredentialsManager::AppfileConfig.try_fetch_value(:team_id) || "H8RQNJB8B4"
     
-    if team_id.nil? || team_id.empty?
-      UI.user_error!("No Team ID found. Please set TEAM_ID in your environment variables or Appfile")
-    end
-    
-    # Determine signing method
+    # Setup code signing
     if ENV["IOS_DIST_SIGNING_KEY"] && !ENV["IOS_DIST_SIGNING_KEY"].empty?
-      # Use manual certificates (already imported in GitHub Actions)
-      UI.message("Using manual code signing")
-      
-      update_code_signing_settings(
-        use_automatic_signing: false,
-        path: "Runner.xcodeproj",
-        team_id: team_id,
-        code_sign_identity: "iPhone Distribution"
-      )
-    elsif ENV["MATCH_GIT_URL"] && !ENV["MATCH_GIT_URL"].empty?
-      # Use Match for code signing
-      UI.message("Using Match for code signing")
-      match(type: "appstore", readonly: true)
-      
+      # Manual signing - certificates already imported by GitHub Actions
       update_code_signing_settings(
         use_automatic_signing: false,
         path: "Runner.xcodeproj",
@@ -33,8 +16,7 @@ platform :ios do
         code_sign_identity: "iPhone Distribution"
       )
     else
-      # Use automatic signing
-      UI.message("Using automatic code signing")
+      # Automatic signing
       update_code_signing_settings(
         use_automatic_signing: true,
         path: "Runner.xcodeproj",
@@ -48,45 +30,26 @@ platform :ios do
       scheme: ENV["SCHEME"] || "Runner",
       export_method: "app-store",
       xcargs: "-allowProvisioningUpdates",
-      export_team_id: team_id,
-      export_options: {
-        teamID: team_id,
-        signingStyle: ENV["IOS_DIST_SIGNING_KEY"] ? "manual" : "automatic"
-      }
+      export_team_id: team_id
     )
 
-    # Upload to TestFlight
+    # Setup authentication
     if ENV["APP_STORE_CONNECT_API_KEY_ID"] && !ENV["APP_STORE_CONNECT_API_KEY_ID"].empty?
-      # Use App Store Connect API Key authentication
+      # Use App Store Connect API Key
       app_store_connect_api_key(
         key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
         issuer_id: ENV["APP_STORE_CONNECT_API_ISSUER"],
         key_content: ENV["APP_STORE_CONNECT_API_KEY"],
         is_key_content_base64: true
       )
-      
-      upload_to_testflight(
-        skip_waiting_for_build_processing: true,
-        skip_submission: true
-      )
-    else
-      # Use traditional authentication
-      upload_to_testflight(
-        username: ENV["APPLE_ID"],
-        app_specific_password: ENV["APP_SPECIFIC_PASSWORD"],
-        skip_waiting_for_build_processing: true,
-        skip_submission: true
-      )
     end
-  end
-
-  desc "Setup Match for code signing"
-  lane :setup_match do
-    match(
-      type: "appstore",
-      app_identifier: CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier),
-      git_url: ENV["MATCH_GIT_URL"],
-      username: ENV["APPLE_ID"]
+    
+    # Upload to TestFlight
+    upload_to_testflight(
+      username: ENV["APPLE_ID"],
+      app_specific_password: ENV["APP_SPECIFIC_PASSWORD"],
+      skip_waiting_for_build_processing: true,
+      skip_submission: true
     )
   end
 end
