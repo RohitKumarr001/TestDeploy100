@@ -37,12 +37,9 @@ jobs:
           bundler-cache: true
           working-directory: android
 
-      - name: Install Fastlane
+      - name: Install Fastlane dependencies
         run: |
           cd android
-          gem install bundler
-          bundle init
-          echo 'gem "fastlane"' >> Gemfile
           bundle install
 
       - name: Deploy to Firebase App Distribution
@@ -77,12 +74,9 @@ jobs:
           bundler-cache: true
           working-directory: ios
 
-      - name: Install Fastlane
+      - name: Install Fastlane dependencies
         run: |
           cd ios
-          gem install bundler
-          bundle init
-          echo 'gem "fastlane"' >> Gemfile
           bundle install
 
       - name: Setup certificates
