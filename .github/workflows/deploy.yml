@@ -79,7 +79,8 @@ jobs:
           cd ios
           bundle install
 
-      - name: Setup certificates
+      - name: Setup certificates (if Match is configured)
+        if: ${{ secrets.MATCH_GIT_URL != '' }}
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APP_SPECIFIC_PASSWORD: ${{ secrets.APP_SPECIFIC_PASSWORD }}
