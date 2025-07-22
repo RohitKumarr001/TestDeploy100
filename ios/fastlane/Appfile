@@ -1,0 +1,23 @@
+# The bundle identifier of your app
+app_identifier("com.example.testdeploy100")
+
+# Your Apple Developer Portal username
+apple_id(ENV["APPLE_ID"])
+
+# Your App Store Connect Team ID (if you're in multiple teams)
+# itc_team_id("123456789")
+
+# Your Developer Portal Team ID (if you're in multiple teams)
+# team_id("ABCDEF1234")
+
+# You can uncomment the lines below and add your own 
+# team selection in case you're in multiple teams
+# fastlane will automatically select the team for you when you run it from the command line
+# team_id "XXXXXXXXXX"
+# itc_team_id "XXXXXXXXXX"
+
+# To select a team for App Store Connect actions
+# itc_team_name "Company Name"
+
+# To select a team for Developer Portal actions
+# team_name "Company Name"

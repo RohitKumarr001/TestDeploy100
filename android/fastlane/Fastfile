@@ -1,0 +1,39 @@
+default_platform(:android)
+
+platform :android do
+  desc "Deploy to Firebase App Distribution"
+  lane :beta do
+    # Ensure we have the Firebase CLI plugin
+    firebase_app_distribution_login(
+      service_credentials_file: ENV["GOOGLE_APPLICATION_CREDENTIALS"]
+    ) if ENV["GOOGLE_APPLICATION_CREDENTIALS"]
+    
+    # The APK should already be built by the GitHub Actions workflow
+    apk_path = "../build/app/outputs/flutter-apk/app-release.apk"
+    
+    # Check if APK exists, if not try AAB
+    unless File.exist?(apk_path)
+      apk_path = "../build/app/outputs/bundle/release/app-release.aab"
+    end
+    
+    # Upload to Firebase App Distribution
+    firebase_app_distribution(
+      app: ENV["FIREBASE_ANDROID_APP_ID"],
+      firebase_cli_token: ENV["FIREBASE_TOKEN"],
+      release_notes: "New beta build from CI/CD",
+      groups: "testers",
+      testers: ENV["FIREBASE_TESTERS"],
+      android_artifact_type: apk_path.end_with?(".aab") ? "AAB" : "APK",
+      android_artifact_path: apk_path
+    )
+  end
+
+  desc "Build release APK"
+  lane :build do
+    # This lane can be used to build the APK if needed
+    gradle(
+      task: "clean assembleRelease",
+      project_dir: "."
+    )
+  end
+end

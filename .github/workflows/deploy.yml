@@ -1,0 +1,109 @@
+name: Deploy to TestFlight and Firebase
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  android:
+    name: Deploy Android to Firebase
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: 'stable'
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.0'
+          bundler-cache: true
+          working-directory: android
+
+      - name: Install Fastlane
+        run: |
+          cd android
+          gem install bundler
+          bundle init
+          echo 'gem "fastlane"' >> Gemfile
+          bundle install
+
+      - name: Deploy to Firebase App Distribution
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_ANDROID_APP_ID: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
+          FIREBASE_TESTERS: ${{ secrets.FIREBASE_TESTERS }}
+        run: |
+          cd android
+          bundle exec fastlane beta
+
+  ios:
+    name: Deploy iOS to TestFlight
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: 'stable'
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.0'
+          bundler-cache: true
+          working-directory: ios
+
+      - name: Install Fastlane
+        run: |
+          cd ios
+          gem install bundler
+          bundle init
+          echo 'gem "fastlane"' >> Gemfile
+          bundle install
+
+      - name: Setup certificates
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APP_SPECIFIC_PASSWORD: ${{ secrets.APP_SPECIFIC_PASSWORD }}
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
+        run: |
+          cd ios
+          bundle exec fastlane match appstore --readonly
+
+      - name: Build iOS
+        run: flutter build ios --release --no-codesign
+
+      - name: Deploy to TestFlight
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APP_SPECIFIC_PASSWORD: ${{ secrets.APP_SPECIFIC_PASSWORD }}
+          XCODEPROJ: ${{ secrets.XCODEPROJ }}
+          SCHEME: ${{ secrets.SCHEME }}
+        run: |
+          cd ios
+          bundle exec fastlane beta

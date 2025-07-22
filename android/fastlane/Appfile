@@ -1,0 +1,5 @@
+# Package name for your application
+package_name("com.example.test_deploy_100")
+
+# Path to the json key file for Google Play Store (optional, for Play Store deployment)
+# json_key_file("path/to/your/play-store-key.json")
