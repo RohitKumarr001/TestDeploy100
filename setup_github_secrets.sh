@@ -18,7 +18,7 @@ echo "Based on your workflow example, here are the values you need:"
 echo ""
 
 echo -e "${GREEN}✅ Already Known Values:${NC}"
-echo "  TEAM_ID: 8ZN6AK49W8"
+echo "  TEAM_ID: H8RQNJB8B4"
 echo "  APPLE_ID: rohit@kahunas.io"
 echo "  APP_SPECIFIC_PASSWORD: sywe-tgou-rtlh-jnqz"
 echo ""
