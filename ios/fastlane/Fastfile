@@ -48,12 +48,28 @@ platform :ios do
     )
 
     # Upload to TestFlight
-    upload_to_testflight(
-      username: ENV["APPLE_ID"],
-      app_specific_password: ENV["APP_SPECIFIC_PASSWORD"],
-      skip_waiting_for_build_processing: true,
-      skip_submission: true
-    )
+    if ENV["APP_STORE_CONNECT_API_KEY_ID"] && !ENV["APP_STORE_CONNECT_API_KEY_ID"].empty?
+      # Use App Store Connect API Key authentication
+      app_store_connect_api_key(
+        key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
+        issuer_id: ENV["APP_STORE_CONNECT_API_ISSUER"],
+        key_content: ENV["APP_STORE_CONNECT_API_KEY"],
+        is_key_content_base64: true
+      )
+      
+      upload_to_testflight(
+        skip_waiting_for_build_processing: true,
+        skip_submission: true
+      )
+    else
+      # Use traditional authentication
+      upload_to_testflight(
+        username: ENV["APPLE_ID"],
+        app_specific_password: ENV["APP_SPECIFIC_PASSWORD"],
+        skip_waiting_for_build_processing: true,
+        skip_submission: true
+      )
+    end
   end
 
   desc "Setup Match for code signing"

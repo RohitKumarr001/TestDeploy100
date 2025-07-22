@@ -41,7 +41,30 @@ Go to: https://github.com/RohitKumarr001/TestDeploy100/settings/secrets/actions
 
 Add these secrets:
 
-### Required Secrets:
+### Option A: App Store Connect API Key (Recommended)
+
+| Secret Name | Value | How to Get |
+|------------|-------|------------|
+| `APP_STORE_CONNECT_API_KEY_ID` | Your Key ID | From App Store Connect |
+| `APP_STORE_CONNECT_API_ISSUER` | Your Issuer ID | From App Store Connect |
+| `APP_STORE_CONNECT_API_KEY` | Base64 encoded .p8 key | See instructions below |
+| `TEAM_ID` | Your Team ID | e.g., "8ZN6AK49W8" |
+| `IOS_DIST_SIGNING_KEY` | (base64 encoded .p12) | From Certificates.p12 |
+| `IOS_DIST_SIGNING_KEY_PASSWORD` | Your .p12 password | Certificate password |
+| `IOS_PROVISION_PROFILE` | (base64 encoded .mobileprovision) | Provisioning profile |
+| `KEYCHAIN_PASSWORD` | Any secure password | e.g., "TempKeychainPass123!" |
+
+#### How to Create App Store Connect API Key:
+1. Go to [App Store Connect](https://appstoreconnect.apple.com)
+2. Navigate to Users and Access → Keys
+3. Click "+" to create a new key
+4. Name: "TestDeploy100 CI/CD"
+5. Access: "App Manager"
+6. Download the .p8 file (you can only download once!)
+7. Note the Key ID and Issuer ID
+8. Convert to base64: `base64 -i ~/Downloads/AuthKey_XXXXXX.p8 | pbcopy`
+
+### Option B: Traditional Authentication
 
 | Secret Name | Value | Description |
 |------------|-------|-------------|
