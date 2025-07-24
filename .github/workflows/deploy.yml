@@ -5,9 +5,47 @@ on:
     branches: [ main ]
 
 jobs:
-  deploy:
-    name: Deploy iOS and Android
+  setup:
+    name: Setup Dependencies
     runs-on: macos-latest
+    outputs:
+      flutter-cache-key: ${{ steps.flutter-cache.outputs.cache-hit }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.7'
+          channel: 'stable'
+
+      - name: Cache Flutter dependencies
+        id: flutter-cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.pub-cache
+            .dart_tool
+          key: flutter-${{ runner.os }}-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            flutter-${{ runner.os }}-
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.0'
+
+  deploy-android:
+    name: Deploy Android to Firebase
+    runs-on: macos-latest
+    needs: setup
+    continue-on-error: true  # This allows the workflow to continue even if Android deployment fails
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -26,6 +64,68 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Cache Flutter dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.pub-cache
+            .dart_tool
+          key: flutter-${{ runner.os }}-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            flutter-${{ runner.os }}-
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.0'
+
+      - name: Install Android Fastlane dependencies
+        run: |
+          cd android
+          bundle install
+
+      - name: Build Android APK
+        run: flutter build apk --release
+
+      - name: Deploy Android to Firebase
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_ANDROID_APP_ID: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
+          FIREBASE_TESTERS: ${{ secrets.FIREBASE_TESTERS }}
+        run: |
+          cd android
+          bundle exec fastlane beta
+
+  deploy-ios:
+    name: Deploy iOS to TestFlight
+    runs-on: macos-latest
+    needs: setup
+    continue-on-error: true  # This allows the workflow to continue even if iOS deployment fails
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.7'
+          channel: 'stable'
+
+      - name: Cache Flutter dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.pub-cache
+            .dart_tool
+          key: flutter-${{ runner.os }}-${{ hashFiles('**/pubspec.lock') }}
+          restore-keys: |
+            flutter-${{ runner.os }}-
+
       - name: Get dependencies
         run: flutter pub get
 
@@ -39,25 +139,6 @@ jobs:
           cd ios
           bundle install
 
-      - name: Install Android Fastlane dependencies
-        run: |
-          cd android
-          bundle install
-
-      # === ANDROID BUILD & DEPLOY ===
-      - name: Build Android APK
-        run: flutter build apk --release
-
-      - name: Deploy Android to Firebase
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-          FIREBASE_ANDROID_APP_ID: ${{ secrets.FIREBASE_ANDROID_APP_ID }}
-          FIREBASE_TESTERS: ${{ secrets.FIREBASE_TESTERS }}
-        run: |
-          cd android
-          bundle exec fastlane beta
-
-      # === iOS BUILD & DEPLOY ===
       - name: Setup iOS certificates
         env:
           IOS_DIST_SIGNING_KEY: ${{ secrets.IOS_DIST_SIGNING_KEY }}
@@ -106,3 +187,36 @@ jobs:
         run: |
           cd ios
           bundle exec fastlane beta
+
+  deployment-summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [deploy-android, deploy-ios]
+    if: always()  # This job will always run, regardless of the success/failure of previous jobs
+    steps:
+      - name: Check deployment results
+        run: |
+          echo "=== Deployment Summary ==="
+          echo "Android deployment: ${{ needs.deploy-android.result }}"
+          echo "iOS deployment: ${{ needs.deploy-ios.result }}"
+          
+          if [[ "${{ needs.deploy-android.result }}" == "success" ]]; then
+            echo "✅ Android deployment completed successfully"
+          else
+            echo "❌ Android deployment failed or was skipped"
+          fi
+          
+          if [[ "${{ needs.deploy-ios.result }}" == "success" ]]; then
+            echo "✅ iOS deployment completed successfully"
+          else
+            echo "❌ iOS deployment failed or was skipped"
+          fi
+          
+          # Set overall status
+          if [[ "${{ needs.deploy-android.result }}" == "success" || "${{ needs.deploy-ios.result }}" == "success" ]]; then
+            echo "🎉 At least one deployment succeeded!"
+            exit 0
+          else
+            echo "💥 All deployments failed"
+            exit 1
+          fi
