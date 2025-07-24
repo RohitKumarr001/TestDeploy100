@@ -139,6 +139,27 @@ jobs:
           cd ios
           bundle install
 
+      - name: Validate iOS secrets
+        run: |
+          echo "Checking iOS secrets..."
+          if [[ -z "${{ secrets.IOS_DIST_SIGNING_KEY }}" ]]; then
+            echo "❌ IOS_DIST_SIGNING_KEY is not set"
+            exit 1
+          fi
+          if [[ -z "${{ secrets.IOS_DIST_SIGNING_KEY_PASSWORD }}" ]]; then
+            echo "❌ IOS_DIST_SIGNING_KEY_PASSWORD is not set"
+            exit 1
+          fi
+          if [[ -z "${{ secrets.IOS_PROVISION_PROFILE }}" ]]; then
+            echo "❌ IOS_PROVISION_PROFILE is not set"
+            exit 1
+          fi
+          if [[ -z "${{ secrets.KEYCHAIN_PASSWORD }}" ]]; then
+            echo "❌ KEYCHAIN_PASSWORD is not set"
+            exit 1
+          fi
+          echo "✅ All iOS secrets are properly configured"
+
       - name: Setup iOS certificates
         env:
           IOS_DIST_SIGNING_KEY: ${{ secrets.IOS_DIST_SIGNING_KEY }}
@@ -151,26 +172,79 @@ jobs:
           PP_PATH=$RUNNER_TEMP/build_pp.mobileprovision
           KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
           
-          # Decode certificates
-          echo -n "$IOS_DIST_SIGNING_KEY" | base64 --decode -o $CERTIFICATE_PATH
-          echo -n "$IOS_PROVISION_PROFILE" | base64 --decode -o $PP_PATH
+          echo "Setting up iOS certificates..."
+          
+          # Validate environment variables are not empty
+          if [[ -z "$IOS_DIST_SIGNING_KEY" ]]; then
+            echo "❌ IOS_DIST_SIGNING_KEY environment variable is empty"
+            exit 1
+          fi
+          
+          if [[ -z "$IOS_PROVISION_PROFILE" ]]; then
+            echo "❌ IOS_PROVISION_PROFILE environment variable is empty"
+            exit 1
+          fi
+          
+          if [[ -z "$KEYCHAIN_PASSWORD" ]]; then
+            echo "❌ KEYCHAIN_PASSWORD environment variable is empty"
+            exit 1
+          fi
+          
+          # Decode certificates with error handling
+          echo "Decoding certificates..."
+          if ! echo -n "$IOS_DIST_SIGNING_KEY" | base64 --decode -o $CERTIFICATE_PATH; then
+            echo "❌ Failed to decode IOS_DIST_SIGNING_KEY"
+            exit 1
+          fi
+          
+          if ! echo -n "$IOS_PROVISION_PROFILE" | base64 --decode -o $PP_PATH; then
+            echo "❌ Failed to decode IOS_PROVISION_PROFILE"
+            exit 1
+          fi
+          
+          # Verify files were created
+          if [[ ! -f "$CERTIFICATE_PATH" ]]; then
+            echo "❌ Certificate file was not created"
+            exit 1
+          fi
+          
+          if [[ ! -f "$PP_PATH" ]]; then
+            echo "❌ Provisioning profile file was not created"
+            exit 1
+          fi
+          
+          echo "✅ Certificate and provisioning profile decoded successfully"
           
           # Create temporary keychain
+          echo "Creating temporary keychain..."
           security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           
-          # Import certificate
-          security import $CERTIFICATE_PATH -P "$IOS_DIST_SIGNING_KEY_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+          # Import certificate with better error handling
+          echo "Importing certificate..."
+          if ! security import $CERTIFICATE_PATH -P "$IOS_DIST_SIGNING_KEY_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH; then
+            echo "❌ Failed to import certificate. Please check your IOS_DIST_SIGNING_KEY and IOS_DIST_SIGNING_KEY_PASSWORD"
+            echo "Certificate file size: $(ls -la $CERTIFICATE_PATH)"
+            exit 1
+          fi
+          
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security list-keychain -d user -s $KEYCHAIN_PATH
           
           # Apply provisioning profile
+          echo "Installing provisioning profile..."
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin <<< $(security cms -D -i $PP_PATH))
+          
+          if ! UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" /dev/stdin <<< $(security cms -D -i $PP_PATH)); then
+            echo "❌ Failed to extract UUID from provisioning profile"
+            exit 1
+          fi
+          
           cp $PP_PATH ~/Library/MobileDevice/Provisioning\ Profiles/$UUID.mobileprovision
           
-          echo "Provisioning profile installed with UUID: $UUID"
+          echo "✅ Provisioning profile installed with UUID: $UUID"
+          echo "✅ iOS certificates setup completed successfully"
 
       - name: Build iOS
         run: flutter build ios --release --no-codesign
